@@ -6,6 +6,8 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.time.DateTimeException;
+import java.time.LocalDate;
 
 import javax.swing.JFrame;
 import javax.swing.JPanel;
@@ -18,6 +20,7 @@ import javax.swing.JSpinner;
 import javax.swing.JList;
 import javax.swing.JButton;
 import javax.swing.JTextField;
+import javax.swing.SpinnerNumberModel;
 import javax.swing.JComboBox;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.DefaultListModel;
@@ -39,7 +42,6 @@ public class Factura extends JFrame implements ActionListener {
 	private JLabel tipoLbl;
 	private JLabel erroresConfirmaciones;
 
-
 	private JSpinner dia;
 	private JSpinner mes;
 	private JSpinner anio;
@@ -47,14 +49,10 @@ public class Factura extends JFrame implements ActionListener {
 	private JButton aniadirBtn;
 	private JButton editarBtn;
 	private JButton eliminarBtn;
-	private int indiceEditando = -1; // -1 = no estamos editando
-
+	private int indiceEditando = -1;
 
 	private JComboBox tipoCB;
 
-	/**
-	 * Launch the application.
-	 */
 	public static void main(String[] args) {
 		EventQueue.invokeLater(new Runnable() {
 			public void run() {
@@ -68,9 +66,6 @@ public class Factura extends JFrame implements ActionListener {
 		});
 	}
 
-	/**
-	 * Create the frame.
-	 */
 	public Factura() {
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		setBounds(100, 100, 719, 440);
@@ -99,15 +94,15 @@ public class Factura extends JFrame implements ActionListener {
 		tipoLbl.setBounds(10, 175, 69, 23);
 		contentPane.add(tipoLbl);
 
-		dia = new JSpinner();
+		dia = new JSpinner(new SpinnerNumberModel(1, 1, 31, 1));
 		dia.setBounds(89, 89, 96, 20);
 		contentPane.add(dia);
 
-		mes = new JSpinner();
+		mes = new JSpinner(new SpinnerNumberModel(1, 1, 12, 1));
 		mes.setBounds(195, 89, 96, 20);
 		contentPane.add(mes);
 
-		anio = new JSpinner();
+		anio = new JSpinner((new SpinnerNumberModel(2025, 1900, 2100, 1)));
 		anio.setBounds(301, 89, 96, 20);
 		contentPane.add(anio);
 
@@ -124,7 +119,6 @@ public class Factura extends JFrame implements ActionListener {
 		editarBtn.setBounds(493, 284, 123, 39);
 		contentPane.add(editarBtn);
 		editarBtn.addActionListener(this);
-		// false para que estén deshabilitados
 		editarBtn.setEnabled(false);
 
 		eliminarBtn = new JButton("Eliminar");
@@ -137,8 +131,7 @@ public class Factura extends JFrame implements ActionListener {
 		asuntoTf.setBounds(89, 34, 96, 18);
 		contentPane.add(asuntoTf);
 		asuntoTf.setColumns(10);
-		
-		//para que no deje escribir más de x caracteres
+
 		asuntoTf.addKeyListener(new KeyAdapter() {
 			public void keyTyped(KeyEvent e) {
 				if (asuntoTf.getText().length() > 9) {
@@ -146,113 +139,180 @@ public class Factura extends JFrame implements ActionListener {
 				}
 			}
 		});
-		
+
 		asuntoTf.getDocument().addDocumentListener(new DocumentListener() {
-		    public void changedUpdate(DocumentEvent e) { comprobarCampos(); }
-		    public void removeUpdate(DocumentEvent e) { comprobarCampos(); }
-		    public void insertUpdate(DocumentEvent e) { comprobarCampos(); }
+			public void changedUpdate(DocumentEvent e) { comprobarCampos(); }
+			public void removeUpdate(DocumentEvent e) { comprobarCampos(); }
+			public void insertUpdate(DocumentEvent e) { comprobarCampos(); }
 		});
 
 		cantTf = new JTextField();
 		cantTf.setBounds(89, 140, 96, 18);
 		contentPane.add(cantTf);
 		cantTf.setColumns(10);
-		cantTf.getDocument().addDocumentListener(new DocumentListener() {
-		    public void changedUpdate(DocumentEvent e) { comprobarCampos(); }
-		    public void removeUpdate(DocumentEvent e) { comprobarCampos(); }
-		    public void insertUpdate(DocumentEvent e) { comprobarCampos(); }
-		});
+			cantTf.getDocument().addDocumentListener(new DocumentListener() {//obtiene el objeto que gestiona el texto escrito en el campo. document listener se activa cuando el contenido cambia
+				public void changedUpdate(DocumentEvent e) { comprobarCampos(); }
+				public void removeUpdate(DocumentEvent e) { comprobarCampos(); }
+				public void insertUpdate(DocumentEvent e) { comprobarCampos(); }
+			});
 
 		tipoCB = new JComboBox();
 		tipoCB.setModel(new DefaultComboBoxModel(new String[] { "Empresa", "Particulares" }));
 		tipoCB.setBounds(89, 176, 96, 20);
 		contentPane.add(tipoCB);
-		
+		tipoCB.addActionListener(e -> comprobarCampos());
+
 		erroresConfirmaciones = new JLabel(".");
 		erroresConfirmaciones.setForeground(new Color(255, 0, 128));
 		erroresConfirmaciones.setBounds(246, 371, 258, 23);
 		contentPane.add(erroresConfirmaciones);
 		erroresConfirmaciones.setVisible(false);
-		//añado el método de comprobar si están todos los campos rellenos en el combobox
-		tipoCB.addActionListener(e -> comprobarCampos());
-		configurarListenersLista(); 
+		//cada vez que hago un cambio el listener salta
+		dia.addChangeListener(e -> comprobarCampos());
+		mes.addChangeListener(e -> comprobarCampos());
+		anio.addChangeListener(e -> comprobarCampos());
+
+		configurarListenersLista();
 	}
 
 	@Override
 	public void actionPerformed(ActionEvent e) {
-		
+
 		if (e.getSource() == aniadirBtn) {
-			String asunto = asuntoTf.getText();
-			int diaN = (int) dia.getValue();
-			int mesN = (int) mes.getValue();
-			int anioN = (int) anio.getValue();
+
+			String asunto = asuntoTf.getText().trim();
+
+			if (asunto.isEmpty()) {
+				erroresConfirmaciones.setText("El asunto no puede estar vacío");
+				erroresConfirmaciones.setVisible(true);
+				return;
+			}
+
+			for (int i = 0; i < modelo.size(); i++) {
+				FacturaClase fExist = modelo.get(i);
+				if (fExist.getAsunto_fac().equals(asunto) && i != indiceEditando) {
+					erroresConfirmaciones.setText("Ya existe una factura con ese asunto");
+					erroresConfirmaciones.setVisible(true);
+					return;
+				}
+			}
+
+			int d = (int) dia.getValue();
+			int m = (int) mes.getValue();
+			int a = (int) anio.getValue();
+
+			LocalDate fecha;
+			try {
+				fecha = LocalDate.of(a, m, d);
+			} catch (DateTimeException ex) {
+				erroresConfirmaciones.setText("La fecha introducida no es válida");
+				erroresConfirmaciones.setVisible(true);
+				return;
+			}
+
 			int cantidad = Integer.parseInt(cantTf.getText());
 			String tipo = tipoCB.getSelectedItem().toString();
-			FacturaClase f = new FacturaClase(tipo, asunto, cantidad, anioN, mesN, diaN);
-			if (indiceEditando != -1) {
-		        // Estamos editando: reemplazamos la factura existente
-		        modelo.set(indiceEditando, f);
-		        indiceEditando = -1; // reseteamos
-		        erroresConfirmaciones.setVisible(true);
-		        erroresConfirmaciones.setText("Factura actualizada con éxito!!");
-		    } else {
-		        // Añadir nueva factura
-		        modelo.addElement(f);
-		        erroresConfirmaciones.setVisible(true);
-		        erroresConfirmaciones.setText("Factura añadida con éxito!!");
-		    }
 
-		    // Limpiar campos si quieres
-		    asuntoTf.setText("");
-		    cantTf.setText("");
-		    tipoCB.setSelectedIndex(0);
-		
-			
-			
+			FacturaClase f = new FacturaClase(tipo, asunto, cantidad, a, m, d);
+
+			if (indiceEditando != -1) {
+				modelo.set(indiceEditando, f);
+				erroresConfirmaciones.setText("Factura actualizada con éxito!!");
+				indiceEditando = -1;
+			} else {
+				modelo.addElement(f);
+				erroresConfirmaciones.setText("Factura añadida con éxito!!");
+			}
+
+			erroresConfirmaciones.setVisible(true);
+
+			asuntoTf.setText("");
+			cantTf.setText("");
+			tipoCB.setSelectedIndex(0);
+			dia.setValue(1);
+			mes.setValue(1);
+			anio.setValue(LocalDate.now().getYear());
+
+			editarBtn.setEnabled(false);
+			eliminarBtn.setEnabled(false);
+
+			listaFacturas.clearSelection();
 		}
+
 		if (e.getSource() == editarBtn) {
-			int index= listaFacturas.getSelectedIndex();
-			if(index!=-1) {
-				FacturaClase f=listaFacturas.getSelectedValue();
+
+			int index = listaFacturas.getSelectedIndex();
+			if (index != -1) {
+
+				FacturaClase f = listaFacturas.getSelectedValue();
+
 				asuntoTf.setText(f.getAsunto_fac());
 				cantTf.setText(String.valueOf(f.getCantidad_fac()));
 				tipoCB.setSelectedItem(f.getTipo_fac());
 				dia.setValue(f.getFecha_fac().getDayOfMonth());
 				mes.setValue(f.getFecha_fac().getMonthValue());
 				anio.setValue(f.getFecha_fac().getYear());
-				
+
 				indiceEditando = index;
 			}
-			
 		}
+
 		if (e.getSource() == eliminarBtn) {
-			int index = listaFacturas.getSelectedIndex(); // índice seleccionado
 
-		    if (index != -1) {  // si hay algo seleccionado
-		        modelo.remove(index);  // lo borro del modelo
-		    }
-		    listaFacturas.clearSelection();
-		    editarBtn.setEnabled(false);
-		    eliminarBtn.setEnabled(false);
-		    erroresConfirmaciones.setVisible(true);
+			int index = listaFacturas.getSelectedIndex();
+
+			if (index != -1) {
+				modelo.remove(index);
+			}
+
+			listaFacturas.clearSelection();
+			editarBtn.setEnabled(false);
+			eliminarBtn.setEnabled(false);
+
+			erroresConfirmaciones.setVisible(true);
 			erroresConfirmaciones.setText("Factura eliminada con éxito!!");
+		}
+	}
 
+	//activO/desactivO el botón 
+	private void comprobarCampos() {
+
+		String asunto = asuntoTf.getText().trim();
+		boolean asuntoValido = asunto.length() >= 1 && asunto.length() <= 10; 
+
+		boolean cantidadValida = validarCantidadEntero(cantTf.getText());
+		if (cantidadValida) {
+			cantidadValida = Integer.parseInt(cantTf.getText()) > 0;
 		}
 
+		boolean tipoValido = tipoCB.getSelectedItem() != null;
+
+		int d = (int) dia.getValue();
+		int m = (int) mes.getValue();
+		int a = (int) anio.getValue();
+
+		boolean fechaValida;
+		try {
+			LocalDate.of(a, m, d);
+			fechaValida = true;
+		} catch (DateTimeException ex) {
+			erroresConfirmaciones.setText("La fecha debe tener un formato válido");
+			erroresConfirmaciones.setVisible(true);
+			fechaValida = false;
+		}
+
+		boolean todoOK = asuntoValido && cantidadValida && tipoValido && fechaValida; //si todos estos oolean son true, todoOK será true también
+
+		aniadirBtn.setEnabled(todoOK);
 	}
-	//compruebo si todos los campos están rellenos, y este método lo añado a cada vez que relleno un campo
-	private void comprobarCampos() {
-	    boolean completo = !asuntoTf.getText().isEmpty() && validarCantidadEntero(cantTf.getText()) && tipoCB.getSelectedItem() != null;
-	    aniadirBtn.setEnabled(completo);
-	}
-	//no deja añadir una cantidad si no es un int
+
 	private boolean validarCantidadEntero(String s) {
-	    try {
-	        Integer.parseInt(s);
-	        return true;
-	    } catch (NumberFormatException e) {
-	        return false;
-	    }
+		try {
+			Integer.parseInt(s);
+			return true;
+		} catch (NumberFormatException e) {
+			return false;
+		}
 	}
 
 	public void configurarListenersLista() {
@@ -272,3 +332,4 @@ public class Factura extends JFrame implements ActionListener {
 
 	}
 }
+
